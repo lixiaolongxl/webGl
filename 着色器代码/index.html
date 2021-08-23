@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <canvas id="content" width="900" height="900"></canvas>
+</body>
+<script id="shader-vs" type="notjs">
+    attribute vec4 v3Position
+    void main(void){
+        gl_Position = vec4(v3Position,1.0)
+    }
+</script>
+<script id="shader-fs" type="notjs">
+    void main(void){
+        gl_FragColor = vec4(1.0, 1.0, 0.0, 1.0);
+    }
+</script>
+<script>
+    var vertexShader=null;
+    var fragmentShader=null;
+    var gl=null
+    function getShaterSource(id){
+        return document.querySelector(id).text;
+    }
+    window.onload = function(){
+        var myCanvas = document.getElementById('content');
+        //获取webgl 上下文
+        gl = myCanvas.getContext('webgl');
+        if(gl){
+            // console.log(gl)
+            //设置画板大小 为帧缓冲区
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+            // vertexShader = getShaterSource('shader-vs');
+            // fragmentShader = getShaterSource('shader-fs');
+            //创建shader容器
+            vertexShader = gl.createShader(gl.VERTEX_SHADER);
+            fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            //绑定数据shader
+            gl.shaderSource(vertexShader,  `
+                precision mediump float;
+
+                attribute vec3 v3Position;
+                
+                attribute vec4 inColor;
+
+                varying vec4 outColor;
+
+                void main(void){
+                    outColor = inColor;
+                    gl_Position = vec4(v3Position, 1.0);
+                }
+            `);
+            gl.shaderSource(fragmentShader, `
+                precision mediump float;
+
+                varying vec4 outColor;
+                void main(void){
+                    gl_FragColor = outColor;
+                }
+            `);
+            //编译shader代码
+            gl.compileShader(vertexShader);
+            gl.compileShader(fragmentShader);
+            //编译报错提示
+            var tmpLog = gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS);
+            if(!tmpLog){
+                alert(tmpLog);
+                return;
+            }
+            tmpLog = gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS);
+            if (!tmpLog ) {
+                alert(tmpLog);
+                return;
+            }
+            //创建执行程序
+            let program = gl.createProgram();
+            //关联shader可执行程序
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+
+            //建立连接形成可执行程序
+            gl.linkProgram(program);
+            //编译连接报错提示
+            tmpLog = gl.getProgramParameter(program, gl.LINK_STATUS);
+            if (!tmpLog ) {
+                alert(tmpLog);
+                return;
+            }
+            //使用可执行程序
+            gl.useProgram(program);
+            //开始想shader传值
+            //定义要穿的三维定点坐标
+            let position = [
+            //  x     y     z     r    g    b    a
+                -0.5, 0.5,  0.0, 1.0, 0.0, 0.0, 1.0,
+                 0.5, 0.5,  0.0, 0.0, 1.0, 0.0, 1.0,
+                 0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 1.0,
+
+                 -0.5, 0.5,  0.0, 1.0, 0.0, 0.0, 1.0,
+                 0.5, -0.5,  0.0, 0.0, 0.0, 1.0, 1.0,
+                 -0.5, -0.5, 0.0, 1.0, 1.0, 0.0, 1.0,
+            ]
+            let position1 = [
+                0.0, 1.0, 0.0,
+                1.0, -1.0, 0.0,
+                1.0, 1.0, 0.0
+            ]
+            //1、获取v3Position属性值所在的位置
+            var positionAttributeLocation = gl.getAttribLocation(program, "v3Position");
+            // inColor 获取inColor属性值所在的位置
+            var colorAttributeLocation = gl.getAttribLocation(program, "inColor");
+            
+            //2、在显卡上创建缓冲区，申请一块内存
+            let vertexBuffer = gl.createBuffer();
+            // let vertexBuffer1 = gl.createBuffer();
+            //3指定缓冲区存储的数据类型为 ARRAY_BUFFER
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer1);
+            //4、真正为缓冲区赋值数据 注意一个浮点数占4个字节Float32Array()
+            // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型    这一句切换buffer
+            // 清空画布为红色
+            gl.clearColor(0.0, 0, 0, 1.0);
+            //颜色缓冲区
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            //使用缓存区
+            // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            //告诉WebGL怎么从我们之前准备的缓冲中获取数据给着色器中的属性。 首先我们需要启用对应属性
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.enableVertexAttribArray(colorAttributeLocation);
+            
+            //给positionAttributeLocation 赋值也就是给v3Position传值
+            // 3：3条数据x,y,z 3个浮点数
+            // gl.FLOAT:数据类型为浮点型
+            // false： 是否归一化
+            // 0 变量之间的间隔 0 = 移动单位数量 * 每个单位占用内存（sizeof(type)）4 每次迭代运行运动多少内存到下一个数据开始点
+            // 0 从缓冲起始位置开始读取
+            gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 4 * 7, 0);
+            gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 0, 3 * 4);
+            
+            // 绘制三角形   gl.TRIANGLES 三角形 0条数据开始 3个
+            // gl.drawArrays(gl.TRIANGLES,0,3);
+
+            gl.drawArrays(gl.TRIANGLES,0,6);
+            // gl.drawArrays(gl.TRIANGLES,3,3); //绘制第二个三角形
+        }
+
+    }
+</script>
+</html>

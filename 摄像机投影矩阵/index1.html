@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- <script src="https://searchcode.com/codesearch/raw/11610755/"></script> -->
+    <script src="./glMatrix.js"></script>
+</head>
+<body>
+    <canvas id="content" width="900" height="900"></canvas>
+</body>
+<script id="shader-vs" type="x-shader/x-vertex">
+    precision mediump float;
+    attribute vec3 v3Position;
+    attribute vec2 a_texCoord;
+    varying vec2 v_texCoord;
+    uniform mat4 proj;
+    void main(void){
+        v_texCoord = a_texCoord;
+        gl_Position = proj * vec4(v3Position, 1.0);
+    }
+</script>
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+    uniform sampler2D u_image;
+    varying vec2 v_texCoord;
+    void main(void){
+
+        gl_FragColor = texture2D(u_image, v_texCoord);
+    }
+</script>
+<script>
+    var vertexShader=null;
+    var fragmentShader=null;
+    var positionAttributeLocation =0;
+    // var colorAttributeLocation = 1;
+    
+    var uniformMat4 = 3; // 4维矩阵
+    var uniformtexture = 4;//纹理图片
+    var uvattr= 5;//纹理坐标
+    
+    var gl=null
+    var projectMat = mat4.create()// 创建一个投影矩阵
+    var thoMat = mat4.identity(mat4.create())//创建一个正交投影矩阵
+    var textureHandle = null; //箱子贴图
+    var caopingTexture = null; //草坪贴图
+
+    var textureDinamic=null; //纹理保存fbo图片
+    
+    var fbo=null;
+    var texWidth = 0;
+    var texHeight = 0;
+    function getShaterSource(id){
+        return document.getElementById(id).innerText;
+    }
+    var position = [];
+    var rectangleposition = [];
+    //初始化纹理
+    function initTexture(url){
+        //创建纹理
+        var texture = gl.createTexture();
+        texture.img = new Image();
+        texture.img.src = url;
+        texture.img.onload = function(){
+            handleOnloadTexture(texture)
+        }
+        return texture;
+    }
+
+    // 开始加在纹理信息
+    function handleOnloadTexture(texture){
+        //指定texture纹理 为2维纹理
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        // 将图像上传到纹理
+        //0 级别
+        //gl.RGBA 格式grba
+        //gl.RGBA 图标格式
+        //gl.UNSIGNED_BYTE rgba 类型范围0-255
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.img);
+        //纹理放大缩小算法都是最近点采样
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        //纹理包装
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+        //状态机清空纹理
+        gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+    //初始化webgl
+    function Init(){
+        var myCanvas = document.getElementById('content');
+        //获取webgl 上下文
+        gl = myCanvas.getContext('webgl');
+
+        //设置画板大小 为帧缓冲区
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        //初始化正交投影
+        mat4.ortho(0,gl.canvas.width,gl.canvas.height,0,-1000,1000,thoMat);
+        mat4.perspective(45,gl.canvas.width/gl.canvas.height,0.1,1000,projectMat);
+        //创建shader容器
+        vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        //绑定数据shader
+
+        gl.shaderSource(vertexShader,  getShaterSource('shader-vs'));
+        gl.shaderSource(fragmentShader, getShaterSource('shader-fs'));
+        //编译shader代码
+        gl.compileShader(vertexShader);
+        gl.compileShader(fragmentShader);
+
+        //编译报错提示
+        var tmpLog = gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS);
+        if(!tmpLog){
+            
+            alert(gl.getShaderInfoLog(vertexShader));
+            return;
+        }
+        tmpLog = gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS);
+        if (!tmpLog ) {
+            var err = gl.getShaderInfoLog(vertexShader)
+            // debugger;
+            alert(err);
+            return;
+        }
+
+        //创建执行程序
+        let program = gl.createProgram();
+        //关联shader可执行程序
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+
+        //建立连接形成可执行程序
+        gl.linkProgram(program);
+        //编译连接报错提示
+        tmpLog = gl.getProgramParameter(program, gl.LINK_STATUS);
+        if (!tmpLog ) {
+            alert(gl.getShaderInfoLog(vertexShader));
+            return;
+        }
+        //使用可执行程序
+        gl.useProgram(program);
+        //开始想shader传值
+        //定义要穿的三维定点坐标
+        position = [
+        //      x       y          z    U   V    
+                -0.5,   0.5,     0.5,  0.0, 0.0, 
+                0.5,   0.5,      0.5,  1.0, 0.0, 
+                0.5,   -0.5,     0.5,  1.0, 1.0, 
+                -0.5,  -0.5,     0.5,  0.0, 1.0, 
+                -0.5,   0.5,    -0.5,  0.0, 0.0,  
+                 0.5,   0.5,    -0.5,  1.0, 0.0, 
+                 0.5,  -0.5,    -0.5,  1.0, 1.0, 
+                -0.5,  -0.5,    -0.5,  0.0, 1.0,  
+
+
+        ]
+        //索引数据
+        let index = [
+            0, 1, 2,
+            0, 2, 3,
+
+            1, 5, 6,
+            1, 6, 2,
+
+            5, 4, 7,
+            5, 7, 6,
+
+            4, 0, 3,
+            4, 3, 7,
+
+            4, 5, 1,
+            4, 1, 0,
+
+            7, 6, 2,
+            7, 2, 3
+        ]
+
+        //矩形数据
+        rectangleposition = [
+            // x      y         z      u    v
+            -100.0,  -10.0,   -100.0,  0.0, 0.0, 
+             100.0,  -10.0,   -100.0,  10.0, 0.0, 
+             100.0,  -10.0,    100.0,  10.0, 10.0, 
+            -100.0,  -10.0,   -100.0,  0.0, 0.0,
+             100.0,  -10.0,    100.0,  10.0, 10.0, 
+            -100.0,  -10.0,    100.0,  0.0, 10.0, 
+        ]
+        
+        //1、获取v3Position属性值所在的位置
+        positionAttributeLocation = gl.getAttribLocation(program, "v3Position");
+        uvattr = gl.getAttribLocation(program, "a_texCoord");
+        
+
+        uniformMat4 = gl.getUniformLocation(program, "proj");
+        uniformtexture = gl.getUniformLocation(program, "u_image");
+
+        
+
+
+        //2、在显卡上创建缓冲区，申请一块内存
+        let vertexBuffer = gl.createBuffer();
+        let indexBuffer  = gl.createBuffer(); //创建索引缓冲区
+
+        //3指定缓冲区存储的数据类型为 ARRAY_BUFFER
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer); //
+        
+        //4、真正为缓冲区赋值数据 注意一个浮点数占4个字节Float32Array()
+        // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型    这一句切换buffer
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(index), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型    这一句切换buffer
+        // textureDinamic = createtextureDinamic(gl.canvas.width, gl.canvas.heigh);
+        // alert(gl.canvas.width)
+        // alert(gl.canvas.heigh)
+        fbo = createFbo(900,900);
+        textureHandle = initTexture('./crate.gif');
+        caopingTexture = initTexture('WechatIMG15.jpeg');
+
+        // 绑定纹理到0阶段激活第0阶段
+        // gl.activeTexture(gl.TEXTURE0);
+        // //绑定使用textureHandle 纹理
+        // gl.bindTexture(gl.TEXTURE_2D, textureHandle);
+        // //在第0阶段取纹理
+        // gl.uniform1i(uniformtexture, 0);
+
+        
+    }
+    function createFbo(width,height){
+        var obj = gl.createFramebuffer(); //创建三个缓冲区的载体
+        gl.bindFramebuffer(gl.FRAMEBUFFER, obj);
+        var depthObj = gl.createRenderbuffer(); //创建渲染缓冲区
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depthObj);
+        //缓冲区存储的深度值每一位16 batDEPTH_COMPONENT16
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
+        //深度缓冲区绑定到   FRAMEBUFFER绑定到RENDERBUFFER
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthObj);
+
+        textureDinamic = createtextureDinamic(width, height);
+        //纹理gl.TEXTURE_2D 第0 作为颜色缓冲区
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureDinamic, 0);
+        
+        //清空buffer
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        return obj;
+    }
+    function createtextureDinamic(width,height){
+        var texture = gl.createTexture(); //创建一张纹理
+        //指定texture纹理 为2维纹理
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        //6:0 代表哟没有边框
+        gl.texImage2D(gl.TEXTURE_2D, 0,gl.RGBA,  width, height,0, gl.RGBA,gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        //纹理包装
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        return texture;
+    }
+    //绘制
+    var rot = 0;
+    var rot2 = 0;
+    function radToDeg(r) {
+        return r * 180 / Math.PI;
+    }
+    function renderToFbo(){
+        // 清空画布为红色
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+        gl.clearColor(1.0, 1.0, 1.0, 1.0);
+        //颜色缓冲区
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        //启用深度测试
+        gl.enable(gl.DEPTH_TEST);
+        // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            //gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            //告诉WebGL怎么从我们之前准备的缓冲中获取数据给着色器中的属性。 首先我们需要启用对应属性
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型    
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.enableVertexAttribArray(uvattr);
+            // gl.useProgram(program);
+            var mvp      = mat4.create();
+            var matTrans = mat4.create(); //平移矩阵
+            var matRot   = mat4.create(); //旋转矩阵
+            var matModel = mat4.create(); //模型矩阵
+            //归一化为单位矩阵
+            // mat4.identity(mvp);
+            mat4.identity(matTrans);
+            mat4.identity(matRot);
+            mat4.identity(matModel);
+            rot2 +=0.001;
+
+            mat4.translate(matTrans,[0.0,0.0,-2.0]);//z轴负方向平移10;
+            mat4.rotate(matRot,radToDeg(rot2),[1.0,1.0,1.0]); //围绕1.0,1.0,1.0 轴旋转
+            mat4.multiply(matTrans,matRot,matModel) //matTrans * matRot 得到matModel 模型矩阵
+            mat4.multiply(projectMat,matModel,mvp)
+
+            // 绑定纹理到0阶段激活第0阶段
+            gl.activeTexture(gl.TEXTURE0);
+            //绑定使用textureHandle 纹理
+            gl.bindTexture(gl.TEXTURE_2D, textureHandle);
+            //在第0阶段取纹理
+            gl.uniform1i(uniformtexture, 0);
+            //给positionAttributeLocation 赋值也就是给v3Position传值
+            // 3：3条数据x,y,z 3个浮点数
+            // gl.FLOAT:数据类型为浮点型
+            // false： 是否归一化
+            // 0 变量之间的间隔 0 = 移动单位数量 * 每个单位占用内存（sizeof(type)）4 每次迭代运行运动多少内存到下一个数据开始点
+            // 0 从缓冲起始位置开始读取
+            gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 4 * 5, 0);
+            gl.vertexAttribPointer(uvattr, 2, gl.FLOAT, false, 4 * 5, 4 * 3);
+            
+            
+            
+            gl.uniformMatrix4fv(uniformMat4,false,mvp) //false 不转值矩阵 给投影矩阵传值uniformMatrix4fv
+            // 绘制三角形   gl.TRIANGLES 三角形 0条数据开始 3个
+            // gl.drawArrays(gl.TRIANGLES,0,3);
+            // 使用索引绘制
+            gl.drawElements(gl.TRIANGLES,36,gl.UNSIGNED_SHORT,0);
+            //清除可执行程序
+    }
+    var transZ = -4.0;
+    var transX = 0.0;
+    function render(){
+            renderToFbo();
+            // 清空画布为红色
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.clearColor(0.0, 0, 0, 1.0);
+            //颜色缓冲区
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            //启用深度测试
+            gl.enable(gl.DEPTH_TEST)
+            //使用缓存区
+            // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            //gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            //告诉WebGL怎么从我们之前准备的缓冲中获取数据给着色器中的属性。 首先我们需要启用对应属性
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型    
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.enableVertexAttribArray(uvattr);
+            // gl.useProgram(program);
+            var mvp      = mat4.create();
+            var matTrans = mat4.create(); //平移矩阵
+            var matRot   = mat4.create(); //旋转矩阵
+            var matModel = mat4.create(); //模型矩阵
+            var matView  = mat4.identity(mat4.create()); //视图矩阵
+            var tmpMat   = mat4.identity(mat4.create());
+            var eys = [0.0, 0.0, 10.0];
+            var center = [0.0, 0.0, 0.0];
+            var up = [0.0, 1.0, 0.0];
+            var lookat = new Float32Array(3);
+            vec3.subtract(center,eys,lookat);
+            vec3.normalize(lookat,lookat);
+
+            mat4.lookAt(eys,center,up,matView);//相机
+
+            mat4.translate(matView,[transX,0.0,transZ])
+
+            mat4.multiply(projectMat,matView,tmpMat);
+            //归一化为单位矩阵
+            // mat4.identity(mvp);
+            mat4.identity(matTrans);
+            mat4.identity(matRot);
+            mat4.identity(matModel);
+            rot +=0.001;
+
+            mat4.translate(matTrans,[0.0,0.0,0.0]);//z轴负方向平移10;
+            mat4.rotate(matRot,radToDeg(rot),[1.0,0.0,0.0]); //围绕1.0,1.0,1.0 轴旋转
+            mat4.multiply(matTrans,matRot,matModel) //matTrans * matRot 得到matModel 模型矩阵
+            mat4.multiply(tmpMat,matModel,mvp)
+
+            // 绑定纹理到0阶段激活第0阶段
+            gl.activeTexture(gl.TEXTURE0);
+            //绑定使用textureHandle 纹理
+            gl.bindTexture(gl.TEXTURE_2D, textureDinamic);
+            //在第0阶段取纹理
+            gl.uniform1i(uniformtexture, 0);
+            //给positionAttributeLocation 赋值也就是给v3Position传值
+            // 3：3条数据x,y,z 3个浮点数
+            // gl.FLOAT:数据类型为浮点型
+            // false： 是否归一化
+            // 0 变量之间的间隔 0 = 移动单位数量 * 每个单位占用内存（sizeof(type)）4 每次迭代运行运动多少内存到下一个数据开始点
+            // 0 从缓冲起始位置开始读取
+            gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 4 * 5, 0);
+            gl.vertexAttribPointer(uvattr, 2, gl.FLOAT, false, 4 * 5, 4 * 3);
+            
+            
+            
+            gl.uniformMatrix4fv(uniformMat4,false,mvp) //false 不转值矩阵 给投影矩阵传值uniformMatrix4fv
+            // 绘制三角形   gl.TRIANGLES 三角形 0条数据开始 3个
+            // gl.drawArrays(gl.TRIANGLES,0,3);
+            // 使用索引绘制
+            gl.drawElements(gl.TRIANGLES,36,gl.UNSIGNED_SHORT,0);
+            //清除可执行程序
+            // gl.useProgram(null);
+            // gl.drawArrays(gl.TRIANGLES,0,6); //绘制第二个三角形
+
+            // gl.activeTexture(gl.TEXTURE0);
+            // debugger;
+            gl.bindTexture(gl.TEXTURE_2D, textureHandle);
+            // gl.uniform1i(uniformtexture, 0);
+            //拷贝纹理
+            // gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 100, 100, 600, 600);
+
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(rectangleposition), gl.STATIC_DRAW);//gl.STATIC_DRA 静态类型  
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 4 * 5, 0);
+            gl.enableVertexAttribArray(uvattr);  
+            gl.vertexAttribPointer(uvattr, 2, gl.FLOAT, false, 4 * 5, 4 * 3);
+
+
+            mat4.multiply(projectMat,matView,mvp);
+            
+            gl.uniformMatrix4fv(uniformMat4,false,mvp); //false 不转值矩阵 给投影
+            gl.drawArrays(gl.TRIANGLES,0,6);
+    }
+    function rendersence(){
+        render();
+        requestAnimationFrame(rendersence)
+    }
+    window.onload = function(){
+        Init();
+        //执行游戏循环
+        rendersence();
+    }
+
+
+    document.onkeydown=function(event){
+        
+        if(event.key =='w'){
+            transZ++
+        }else if(event.key =='s'){  
+            transZ--
+        }else if(event.key =='a'){
+            transX++
+        }else if(event.key =='d'){
+            transX--
+        }
+        
+    }
+   
+</script>
+</html>

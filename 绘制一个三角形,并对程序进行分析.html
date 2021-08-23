@@ -1,0 +1,81 @@
+<!DOCTYPE>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>webGL</title>
+    <script>
+        let v3Index = 0;
+
+        function init() {
+            let canvas = document.querySelector("#canvas");
+            let gl = canvas.getContext("webgl2");
+            gl.viewport(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+            let vertexShader = gl.createShader(gl.VERTEX_SHADER);
+            let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+
+            gl.shaderSource(vertexShader, `
+                attribute vec3 v3Position;
+                void main(void){
+                    gl_Position = vec4(v3Position, 1.0);
+                }
+            `)
+
+            gl.shaderSource(fragmentShader, `
+                void main(void){
+                    gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);
+                }
+            `)
+
+            gl.compileShader(vertexShader);
+            gl.compileShader(fragmentShader);
+
+            let tmpLog = gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS);
+            if (!tmpLog && !gl.isContextLost()) {
+                alert(tmpLog);
+                return;
+            }
+            tmpLog = gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS);
+            if (!tmpLog && !gl.isContextLost()) {
+                alert(tmpLog);
+                return;
+            }
+
+            let program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            // gl.bindAttribLocation(program, v3Index, "v3Position");
+            gl.linkProgram(program);
+            tmpLog = gl.getProgramParameter(program, gl.LINK_STATUS);
+            if (!tmpLog && !gl.isContextLost()) {
+                alert(tmpLog);
+                return;
+            }
+            gl.useProgram(program);
+            gl.bindAttribLocation(program, v3Index, "v3Position");
+            let position = [
+                0.0, 1.0, 0.0,
+                -1.0, -1.0, 0.0,
+                1.0, -1.0, 0.0
+            ]
+            let vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(position), gl.STATIC_DRAW);
+
+            gl.clearColor(1.0, 1.0, 1.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.enableVertexAttribArray(v3Index);
+            gl.vertexAttribPointer(v3Index, 3, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES,0,3);
+        }
+
+    </script>
+</head>
+<body onload="init()">
+<canvas height="400" width="400" id="canvas">
+    不支持canvas
+</canvas>
+</body>
+</html>
