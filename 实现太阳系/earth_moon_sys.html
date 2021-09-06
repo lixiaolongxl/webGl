@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Three.js_轨道 旋转</title>
+   
+	   <style type="text/css">
+			div#canvas-frame {
+				border: none;
+				cursor: pointer;
+				width: 100%;
+				height: 960px;
+				background-color: #000000;
+			}
+		</style>
+	</head>
+
+	<body>
+        <div id="ThreeJS" style="position: absolute; left:0px; top:0px"></div>
+
+        <script src="js/Three.js"></script>
+        <script src="js/Detector.js"></script>
+        <script src="js/Stats.js"></script>
+        <script src="js/OrbitControls.js"></script>
+        <script src="js/THREEx.KeyboardState.js"></script>
+        <script src="js/THREEx.FullScreen.js"></script>
+        <script src="js/THREEx.WindowResize.js"></script>
+        <script src="js/SubdivisionModifier.js"></script>
+        <script src="js/DAT.GUI.min.js"></script>
+
+        <script src="js/other/solar/init.js"></script>
+        <script src="js/other/solar/planets.js"></script>
+        <script src="js/other/solar/test.js"></script>
+
+        <script>
+
+            var earth_orbit,moon_orbit;
+            var earth_obj3D,moon_obj3D;
+            var earth,moon;
+            var axisHelper = new THREE.AxisHelper(4);
+            var earth_radius=200,earth_orbit_radius=1200,moon_radius=80,moon_orbit_radius=400;
+
+            var xOffset = -1000;
+            function initObject() {
+                light.position.set(xOffset,0,800);
+                //世界坐标系
+                var wcs = createCoordinateSystem(100);
+                scene.add(wcs);
+
+                //地球
+                earth = createSphere(earth_radius,80,'images/solar/earth.jpg');
+                earth.position.set(earth_orbit_radius,0,0);
+                earth.rotation.set(23.26*(Math.PI/180).toFixed(2) - Math.PI/2,0,0);
+                //地球公转轨道
+                earth_orbit = createOrbit(earth_orbit_radius);
+                //地球本地坐标系
+                var elcs = createCoordinateSystem(earth_radius + 5);
+                earth_obj3D = new THREE.Object3D();
+                earth_obj3D.add(axisHelper) ;
+                earth_obj3D.add(elcs);
+                earth_obj3D.add(earth);
+                earth_obj3D.add(earth_orbit);
+                earth_obj3D.position.set(xOffset,0,0);  //位置在太阳中心
+                earth_obj3D.rotation.set(Math.PI/2,23*(Math.PI/180).toFixed(2),0);
+
+                //月球
+                moon = createSphere(moon_radius,30,'images/solar/moon.jpg');
+                moon.position.set(moon_orbit_radius, 0,0);
+                moon.rotation.set(-Math.PI/2,0,0);
+                //月球公转轨道
+                moon_orbit = createOrbit(moon_orbit_radius);
+                //月球本地坐标系
+                var mlcs = createCoordinateSystem(moon_orbit_radius + 5);
+                moon_obj3D = new THREE.Object3D();
+                moon_obj3D.add(axisHelper) ;
+                moon_obj3D.add(mlcs);
+                moon_obj3D.add(moon);
+                moon_obj3D.add(moon_orbit);
+                moon_obj3D.position.set(earth_orbit_radius,0,0); //位置在地球中心
+                moon_obj3D.rotation.set(Math.PI/6,0,0);
+
+                earth_obj3D.add(moon_obj3D);
+
+                scene.add(earth_obj3D);
+            }
+
+
+            function threeStart() {
+                initThree();
+                initGUI();
+
+                initObject();
+
+                animation();
+            }
+
+            function animation() {
+                controls.update();
+                stats.update();
+
+                requestAnimationFrame(animation);
+
+                moon.rotation.y += 0.01;
+                earth.rotation.y += 0.01;
+
+                moon_obj3D.rotation.x += param.moon_revolution_x_speed;
+                moon_obj3D.rotation.y += param.moon_revolution_y_speed;
+                moon_obj3D.rotation.z += param.moon_revolution_z_speed;
+
+                earth_obj3D.rotation.x += param.earth_revolution_x_speed;
+                earth_obj3D.rotation.y += param.earth_revolution_y_speed;
+                earth_obj3D.rotation.z += param.earth_revolution_z_speed;
+
+                render();
+            }
+
+            function render(){
+                if(param.earth_radius !== earth_radius)
+                    earth.geometry.radius =  param.earth_radius;
+//                    earth_radius =  param.earth_radius;
+                if(param.earth_orbit_radius !== earth_orbit_radius)
+                    earth_orbit_radius = param.earth_orbit_radius;
+                if(param.moon_radius !== moon_radius)
+                    moon_radius = param.moon_radius;
+                if(param.moon_orbit_radius !== moon_orbit_radius)
+                    moon_orbit_radius = param.moon_orbit_radius;
+
+
+                renderer.render(scene, camera);
+            }
+
+            var param;
+            function initGUI(){
+                var gui = new dat.GUI();
+                param = new ParamObj();
+
+                gui.add( param,"earth").name("地球").onChange( render );
+                gui.add( param,"earth_orbit").name("公转轨道").onChange( render );
+                gui.add( param,"earth_local_coordinate_sys").name("本地坐标系").onChange( render );
+                gui.add( param,"earth_obj3D").name("obj3D").onChange( render );
+                gui.add( param,"earth_radius", 10, 200).name("半径").onChange( render );
+                gui.add( param,"earth_orbit_radius",  100, 800).name("公转轨道半径").onChange( render );
+                gui.add( param,"earth_orbit_x_angle", 0,Math.PI/2).name("轨道倾斜(x)").onChange( render );
+                gui.add( param,"earth_orbit_y_angle", 0,Math.PI/2).name("轨道倾斜(y)").onChange( render );
+                gui.add( param,"earth_orbit_z_angle", 0,Math.PI/2).name("轨道倾斜(z)").onChange( render );
+                gui.add( param,"earth_obj3D_x_angle", 0,Math.PI/2).name("obj3D倾斜(x)").onChange( render );
+                gui.add( param,"earth_obj3D_y_angle", 0,Math.PI/2).name("obj3D倾斜(y)").onChange( render );
+                gui.add( param,"earth_obj3D_z_angle", 0,Math.PI/2).name("obj3D倾斜(z)").onChange( render );
+
+                gui.add( param,"earth_revolution_x_speed", 0,0.1).name("公转速度(x)").onChange( render );
+                gui.add( param,"earth_revolution_y_speed", 0,0.1).name("公转速度(y)").onChange( render );
+                gui.add( param,"earth_revolution_z_speed", 0,0.1).name("公转速度(z)").onChange( render );
+
+                gui.add( param,"moon").name("月球").onChange( render );
+                gui.add( param,"moon_orbit").name("公转轨道").onChange( render );
+                gui.add( param,"moon_local_coordinate_sys").name("本地坐标系" ).onChange( render );
+                gui.add( param,"moon_obj3D").name("obj3D").onChange( render );
+                gui.add( param,"moon_radius",10, 200 ).name("半径").onChange( render );
+                gui.add( param,"moon_orbit_radius",100, 800).name("公转轨道半径").onChange( render );
+                gui.add( param,"moon_orbit_x_angle", 0,Math.PI/2).name("轨道倾斜(x)").onChange( render );
+                gui.add( param,"moon_orbit_y_angle", 0,Math.PI/2).name("轨道倾斜(y)").onChange( render );
+                gui.add( param,"moon_orbit_z_angle", 0,Math.PI/2).name("轨道倾斜(z)").onChange( render );
+                gui.add( param,"moon_obj3D_x_angle", 0,Math.PI/2).name("obj3D倾斜(x)").onChange( render );
+                gui.add( param,"moon_obj3D_y_angle", 0,Math.PI/2).name("obj3D倾斜(y)").onChange( render );
+                gui.add( param,"moon_obj3D_z_angle", 0,Math.PI/2).name("obj3D倾斜(z)").onChange( render );
+
+                gui.add( param,"moon_revolution_x_speed", 0,0.1).name("公转速度(x)").onChange( render );
+                gui.add( param,"moon_revolution_y_speed", 0,0.1).name("公转速度(y)").onChange( render );
+                gui.add( param,"moon_revolution_z_speed", 0,0.1).name("公转速度(z)").onChange( render );
+            }
+
+
+            threeStart();
+
+        </script>
+	</body>
+</html>
