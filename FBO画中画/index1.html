@@ -96,6 +96,8 @@
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         //初始化正交投影
         mat4.ortho(0,gl.canvas.width,gl.canvas.height,0,-1000,1000,thoMat);
+
+        // mat4.perspective(45,gl.canvas.width/gl.canvas.height,0.1,100,thoMat);
         mat4.perspective(45,gl.canvas.width/gl.canvas.height,0.1,100,projectMat);
         //创建shader容器
         vertexShader = gl.createShader(gl.VERTEX_SHADER);
@@ -186,13 +188,13 @@
                 // 400,   0.0,    0.0,  1.0, 0.0, 
                 // 400.0, 400,    0.0,  1.0, 1.0,
 
-                400,   0.0,    0.0,  0.0, 0.0, 
-                400.0, 400,    0.0,  1.0, 0.0, 
-                0.0,   400.0,  0.0,  1.0, 1.0,  
+                200,   -200.0,    0.0,  0.0, 0.0, 
+                200.0, 200,    0.0,  1.0, 0.0, 
+                -200.0,   200.0,  0.0,  1.0, 1.0,  
 
-                400,   0.0,    0.0,  0.0, 0.0, 
-                0.0,   400.0,  0.0,  1.0, 1.0, 
-                0.0,   0.0,    0.0,  0.0, 1.0, 
+                200,   -200.0,    0.0,  0.0, 0.0, 
+                -200.0,   200.0,  0.0,  1.0, 1.0, 
+                -200.0,   -200.0,    0.0,  0.0, 1.0, 
 
         ]
         
@@ -320,9 +322,28 @@
             gl.vertexAttribPointer(uvattr, 2, gl.FLOAT, false, 4 * 5, 4 * 3);
 
 
+            var mvp      = mat4.create();
+            var matTrans = mat4.create(); //平移矩阵
+            var matRot   = mat4.create(); //旋转矩阵
+            var matModel = mat4.create(); //模型矩阵
+            //归一化为单位矩阵
+            mat4.identity(mvp);
+            mat4.identity(matTrans);
+            mat4.identity(matRot);
+            mat4.identity(matModel);
+            rot +=0.0005;
+            var v31 = vec3.create([200.0,200.0,1.0])
+            var v32 = vec3.create([200.0,200.0,2.0])
+            var v33 = null;
+            v33 = vec3.subtract(v32,v31,v33)
+            // console.log(v33)
+            // v3.normalize(v3)
+            mat4.translate(matTrans,[300.0,300.0,0.0]);//z轴负方向平移10;
+            mat4.rotate(matRot,radToDeg(rot),v33); //围绕1.0,1.0,1.0 轴旋转
+            mat4.multiply(matTrans,matRot,matModel) //matTrans * matRot 得到matModel 模型矩阵
+            mat4.multiply(thoMat,matModel,mvp)            
             
-            
-            gl.uniformMatrix4fv(uniformMat4,false,thoMat); //false 不转值矩阵 给投影
+            gl.uniformMatrix4fv(uniformMat4,false,mvp); //false 不转值矩阵 给投影
             gl.drawArrays(gl.TRIANGLES,0,6);
     }
     function rendersence(){
